@@ -20,7 +20,6 @@ provider "signalfx" {
 
 provider "aws" {
   region = var.aws_region
-  # profile = var.aws_profile
 }
 
 # --------- Variables ---------
@@ -48,23 +47,19 @@ variable "obs_tier" {
 }
 
 locals {
-  is_silver_plus = var.obs_tier != "bronze"
-  is_gold_plus   = var.obs_tier == "gold" || var.obs_tier == "platinum"
+  # Bronze = minimal
+  is_silver_plus = contains(["silver", "gold", "platinum"], var.obs_tier)
+  is_gold_plus   = contains(["gold", "platinum"], var.obs_tier)
+  is_platinum    = var.obs_tier == "platinum"
 }
 
-# variable "aws_profile" {
-#   type = string
-# }
-
 # --------- Splunk external integration ---------
-# Gives us external_id and Splunk's AWS account ID. [web:1][web:90]
 
 resource "signalfx_aws_external_integration" "this" {
   name = var.account_name
 }
 
 # --------- IAM role in your AWS account ---------
-# Trusts Splunk's AWS account using the external_id. [web:1][web:90]
 
 data "aws_iam_policy_document" "splunk_assume_role" {
   statement {
@@ -141,28 +136,27 @@ resource "aws_iam_role_policy_attachment" "splunk_o11y_attach" {
 }
 
 # --------- Splunk AWS integration ---------
-# Uses integration_id, external_id, and roleArn. [web:2][web:89]
 
 resource "signalfx_aws_integration" "this" {
-  enabled                  = true
-  integration_id           = signalfx_aws_external_integration.this.id
-  external_id              = signalfx_aws_external_integration.this.external_id
-  role_arn                 = aws_iam_role.splunk_o11y.arn
+  enabled                 = true
+  integration_id          = signalfx_aws_external_integration.this.id
+  external_id             = signalfx_aws_external_integration.this.external_id
+  role_arn                = aws_iam_role.splunk_o11y.arn
 
-  regions                  = [var.aws_region]
-  import_cloud_watch       = true
-  use_metric_streams_sync  = true
-  enable_aws_usage         = true
+  regions                 = [var.aws_region]
+  import_cloud_watch      = true
+  use_metric_streams_sync = true
+  enable_aws_usage        = true
 }
 
-# --------- Splunk O11y dashboards (provider-compatible) ---------
-# One dashboard group + 3 charts, then a dashboard that includes them. [web:139][web:136]
+# --------- Splunk O11y dashboards ---------
 
 resource "signalfx_dashboard_group" "aws_account" {
   name = "${var.account_name} - AWS"
 }
 
-# Chart 1: ELB/ALB Request Count
+# ----- Bronze core charts -----
+
 resource "signalfx_time_chart" "elb_request_count" {
   name        = "${var.account_name} - ELB/ALB Request Count"
   description = "Sum of request count across ELB/ALB in ${var.aws_region}."
@@ -175,7 +169,6 @@ resource "signalfx_time_chart" "elb_request_count" {
   EOT
 }
 
-# Chart 2: ELB/ALB 5xx Error Rate
 resource "signalfx_time_chart" "elb_5xx_error_rate" {
   name        = "${var.account_name} - ELB/ALB 5xx Error Rate"
   description = "Percent of 5xx responses on ELB/ALB in ${var.aws_region}."
@@ -191,7 +184,6 @@ resource "signalfx_time_chart" "elb_5xx_error_rate" {
   EOF
 }
 
-# Chart 3: RDS CPU Utilization
 resource "signalfx_time_chart" "rds_cpu" {
   name        = "${var.account_name} - RDS CPU Utilization"
   description = "Average CPU for RDS instances in ${var.aws_region}."
@@ -235,15 +227,48 @@ resource "signalfx_dashboard" "aws_core_metrics" {
   }
 }
 
+# ----- Platinum-only App Overview (no chart ID reuse) -----
+
+resource "signalfx_time_chart" "elb_request_count_platinum" {
+  count       = local.is_platinum ? 1 : 0
+  name        = "${var.account_name} - ELB Requests (Platinum)"
+  description = "ELB/ALB request count for Platinum tier app overview."
+  plot_type   = "LineChart"
+
+  # same SignalFlow as elb_request_count
+  program_text = <<-EOT
+    data("aws.elb.request_count",
+         filter=filter("aws_region", "${var.aws_region}"),
+         rollup="sum").publish()
+  EOT
+}
+
+resource "signalfx_time_chart" "elb_5xx_error_rate_platinum" {
+  count       = local.is_platinum ? 1 : 0
+  name        = "${var.account_name} - ELB 5xx Error Rate (Platinum)"
+  description = "ELB/ALB 5xx error rate for Platinum tier app overview."
+
+  # same SignalFlow as elb_5xx_error_rate
+  program_text = <<-EOF
+    errors = data("aws.elb.httpcode_elb_5xx",
+                  filter=filter("aws_region", "${var.aws_region}"),
+                  rollup="sum")
+    requests = data("aws.elb.request_count",
+                    filter=filter("aws_region", "${var.aws_region}"),
+                    rollup="sum")
+    (errors / requests).scale(100).publish(label="error_rate_pct")
+  EOF
+}
+
 resource "signalfx_dashboard" "app_overview" {
-  count           = local.is_silver_plus ? 1 : 0
+  count           = local.is_platinum ? 1 : 0
   name            = "${var.account_name} - App Overview"
   dashboard_group = signalfx_dashboard_group.aws_account.id
   description     = "Higher-tier app overview for ${var.account_name}."
   time_range      = "-1h"
 
   chart {
-    chart_id = signalfx_time_chart.elb_request_count.id
+    chart_id = signalfx_time_chart.elb_request_count_platinum[0].id
     width    = 12
     height   = 4
     row      = 0
@@ -251,14 +276,13 @@ resource "signalfx_dashboard" "app_overview" {
   }
 
   chart {
-    chart_id = signalfx_time_chart.elb_5xx_error_rate.id
+    chart_id = signalfx_time_chart.elb_5xx_error_rate_platinum[0].id
     width    = 12
     height   = 4
     row      = 4
     column   = 0
   }
 }
-
 
 # --------- Outputs ---------
 
