@@ -190,7 +190,7 @@ resource "signalfx_time_chart" "rds_cpu" {
   program_text = <<-EOT
     data("aws.rds.cpuutilization",
          filter=filter("aws_region", "${var.aws_region}"),
-         rollup="avg").publish()
+         rollup="average").publish()
   EOT
 }
 
