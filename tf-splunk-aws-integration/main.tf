@@ -44,9 +44,11 @@ resource "signalfx_aws_integration" "this" {
 }
 
 output "external_id" {
-  value = signalfx_aws_external_integration.this.external_id
+  value     = signalfx_aws_external_integration.this.external_id
+  sensitive = true
 }
 
 output "splunk_aws_account_id" {
-  value = signalfx_aws_external_integration.this.signalfx_aws_account
+  value     = signalfx_aws_external_integration.this.signalfx_aws_account
+  sensitive = true
 }
