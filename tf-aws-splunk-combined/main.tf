@@ -72,12 +72,6 @@ data "aws_iam_policy_document" "splunk_assume_role" {
     }
   }
 }
-
-resource "aws_iam_role" "splunk_o11y" {
-  name               = "${var.account_name}-splunk-o11y"
-  assume_role_policy = data.aws_iam_policy_document.splunk_assume_role.json
-}
-
 resource "aws_iam_policy" "splunk_o11y" {
   name        = "${var.account_name}-splunk-o11y-policy"
   description = "Permissions required by Splunk Observability Cloud"
@@ -93,8 +87,19 @@ resource "aws_iam_policy" "splunk_o11y" {
         "cloudwatch:GetMetricData",
         "cloudwatch:DescribeAlarms",
         "cloudwatch:DescribeAlarmsForMetric",
+        "cloudwatch:ListMetricStreams",
+        "cloudwatch:GetMetricStream",
+        "cloudwatch:PutMetricStream",
+        "cloudwatch:DeleteMetricStream",
+        "cloudwatch:StartMetricStreams",
+        "cloudwatch:StopMetricStreams",
         "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams"
+        "logs:DescribeLogStreams",
+        "ec2:DescribeInstances",
+        "ec2:DescribeInstanceStatus",
+        "ec2:DescribeRegions",
+        "tag:GetResources",
+        "organizations:DescribeOrganization"
       ],
       "Resource": "*"
     }
@@ -102,6 +107,7 @@ resource "aws_iam_policy" "splunk_o11y" {
 }
 JSON
 }
+
 
 resource "aws_iam_role_policy_attachment" "splunk_o11y_attach" {
   role       = aws_iam_role.splunk_o11y.name
