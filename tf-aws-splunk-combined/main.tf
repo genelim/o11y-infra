@@ -138,4 +138,4 @@ output "splunk_aws_account_id" {
 output "splunk_role_arn" {
   value = aws_iam_role.splunk_o11y.arn
 }
-EOF
+
