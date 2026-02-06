@@ -47,9 +47,9 @@ variable "obs_tier" {
 }
 
 # values passed from tf-aws-splunk-base
-variable "external_integration_id" {
-  type = string
-}
+#variable "external_integration_id" {
+#  type = string
+#}
 
 variable "external_integration_external_id" {
   type = string
