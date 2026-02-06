@@ -47,9 +47,9 @@ variable "obs_tier" {
 }
 
 # values passed from tf-aws-splunk-base
-#variable "external_integration_id" {
-#  type = string
-#}
+variable "external_integration_id" {
+  type = string
+}
 
 variable "external_integration_external_id" {
   type = string
@@ -72,7 +72,7 @@ locals {
 resource "signalfx_aws_integration" "this" {
   enabled                 = true
   # REMOVE this line:
-  # integration_id        = var.external_integration_id
+   integration_id        = var.external_integration_id
 
   external_id             = var.external_integration_external_id
   role_arn                = var.splunk_role_arn
