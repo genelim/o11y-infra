@@ -11,8 +11,6 @@ terraform {
   }
 }
 
-# --------- Providers ---------
-
 provider "signalfx" {
   auth_token = var.splunk_o11y_token
   api_url    = var.splunk_o11y_api_url
@@ -21,8 +19,6 @@ provider "signalfx" {
 provider "aws" {
   region = var.aws_region
 }
-
-# --------- Variables ---------
 
 variable "splunk_o11y_token" {
   type      = string
@@ -43,105 +39,39 @@ variable "aws_region" {
 
 variable "obs_tier" {
   type    = string
-  default = "bronze"  # allowed: "bronze", "silver", "gold", "platinum"
+  default = "bronze"
 }
 
 locals {
-  # Bronze = minimal
   is_silver_plus = contains(["silver", "gold", "platinum"], var.obs_tier)
   is_gold_plus   = contains(["gold", "platinum"], var.obs_tier)
   is_platinum    = var.obs_tier == "platinum"
 }
 
-# --------- Splunk external integration ---------
+# You can either:
+# - hard-code values again here, or
+# - pass them in as variables/remote state from module A.
+# For simplicity, assume we pass in role ARN and external integration id:
 
-resource "signalfx_aws_external_integration" "this" {
-  name = var.account_name
+variable "external_integration_id" {
+  type = string
 }
 
-# --------- IAM role in your AWS account ---------
-
-data "aws_iam_policy_document" "splunk_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "AWS"
-      identifiers = [signalfx_aws_external_integration.this.signalfx_aws_account]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "sts:ExternalId"
-      values   = [signalfx_aws_external_integration.this.external_id]
-    }
-  }
+variable "external_integration_external_id" {
+  type = string
 }
 
-resource "aws_iam_role" "splunk_o11y" {
-  name               = "${var.account_name}-splunk-o11y"
-  assume_role_policy = data.aws_iam_policy_document.splunk_assume_role.json
-}
-
-resource "aws_iam_policy" "splunk_o11y" {
-  name        = "${var.account_name}-splunk-o11y-policy"
-  description = "Permissions required by Splunk Observability Cloud"
-
-  policy = <<JSON
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "cloudwatch:ListMetrics",
-        "cloudwatch:GetMetricData",
-        "cloudwatch:DescribeAlarms",
-        "cloudwatch:DescribeAlarmsForMetric",
-        "cloudwatch:ListMetricStreams",
-        "cloudwatch:GetMetricStream",
-        "cloudwatch:PutMetricStream",
-        "cloudwatch:DeleteMetricStream",
-        "cloudwatch:StartMetricStreams",
-        "cloudwatch:StopMetricStreams",
-
-        "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams",
-
-        "ec2:DescribeInstances",
-        "ec2:DescribeInstanceStatus",
-        "ec2:DescribeRegions",
-        "ec2:DescribeTags",
-        "ec2:DescribeReservedInstances",
-        "ec2:DescribeReservedInstancesModifications",
-        "ec2:DescribeVolumes",
-        "ec2:DescribeVolumeStatus",
-        "ec2:DescribeSecurityGroups",
-        "ec2:DescribeSubnets",
-        "ec2:DescribeVpcs",
-
-        "tag:GetResources",
-        "organizations:DescribeOrganization"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-JSON
-}
-
-resource "aws_iam_role_policy_attachment" "splunk_o11y_attach" {
-  role       = aws_iam_role.splunk_o11y.name
-  policy_arn = aws_iam_policy.splunk_o11y.arn
+variable "splunk_role_arn" {
+  type = string
 }
 
 # --------- Splunk AWS integration ---------
 
 resource "signalfx_aws_integration" "this" {
   enabled                 = true
-  integration_id          = signalfx_aws_external_integration.this.id
-  external_id             = signalfx_aws_external_integration.this.external_id
-  role_arn                = aws_iam_role.splunk_o11y.arn
+  integration_id          = var.external_integration_id
+  external_id             = var.external_integration_external_id
+  role_arn                = var.splunk_role_arn
 
   regions                 = [var.aws_region]
   import_cloud_watch      = true
@@ -155,148 +85,16 @@ resource "signalfx_dashboard_group" "aws_account" {
   name = "${var.account_name} - AWS"
 }
 
-# ----- Bronze core charts -----
+# Bronze core charts...
 
-resource "signalfx_time_chart" "elb_request_count" {
-  name        = "${var.account_name} - ELB/ALB Request Count"
-  description = "Sum of request count across ELB/ALB in ${var.aws_region}."
-  plot_type   = "LineChart"
+resource "signalfx_time_chart" "elb_request_count" { ... }
+resource "signalfx_time_chart" "elb_5xx_error_rate" { ... }
+resource "signalfx_time_chart" "rds_cpu" { ... }
 
-  program_text = <<-EOT
-    data("aws.elb.request_count",
-         filter=filter("aws_region", "${var.aws_region}"),
-         rollup="sum").publish()
-  EOT
-}
+resource "signalfx_dashboard" "aws_core_metrics" { ... }
 
-resource "signalfx_time_chart" "elb_5xx_error_rate" {
-  name        = "${var.account_name} - ELB/ALB 5xx Error Rate"
-  description = "Percent of 5xx responses on ELB/ALB in ${var.aws_region}."
-
-  program_text = <<-EOF
-    errors = data("aws.elb.httpcode_elb_5xx",
-                  filter=filter("aws_region", "${var.aws_region}"),
-                  rollup="sum")
-    requests = data("aws.elb.request_count",
-                    filter=filter("aws_region", "${var.aws_region}"),
-                    rollup="sum")
-    (errors / requests).scale(100).publish(label="error_rate_pct")
-  EOF
-}
-
-resource "signalfx_time_chart" "rds_cpu" {
-  name        = "${var.account_name} - RDS CPU Utilization"
-  description = "Average CPU for RDS instances in ${var.aws_region}."
-  plot_type   = "LineChart"
-
-  program_text = <<-EOT
-    data("aws.rds.cpuutilization",
-         filter=filter("aws_region", "${var.aws_region}"),
-         rollup="average").publish()
-  EOT
-}
-
-resource "signalfx_dashboard" "aws_core_metrics" {
-  name            = "${var.account_name} - Core AWS Metrics"
-  dashboard_group = signalfx_dashboard_group.aws_account.id
-  description     = "Core AWS infra metrics for ${var.account_name}."
-  time_range      = "-1h"
-
-  chart {
-    chart_id = signalfx_time_chart.elb_request_count.id
-    width    = 12
-    height   = 4
-    row      = 0
-    column   = 0
-  }
-
-  chart {
-    chart_id = signalfx_time_chart.elb_5xx_error_rate.id
-    width    = 12
-    height   = 4
-    row      = 4
-    column   = 0
-  }
-
-  chart {
-    chart_id = signalfx_time_chart.rds_cpu.id
-    width    = 12
-    height   = 4
-    row      = 8
-    column   = 0
-  }
-}
-
-# ----- Platinum-only App Overview (no chart ID reuse) -----
-
-resource "signalfx_time_chart" "elb_request_count_platinum" {
-  count       = local.is_platinum ? 1 : 0
-  name        = "${var.account_name} - ELB Requests (Platinum)"
-  description = "ELB/ALB request count for Platinum tier app overview."
-  plot_type   = "LineChart"
-
-  # same SignalFlow as elb_request_count
-  program_text = <<-EOT
-    data("aws.elb.request_count",
-         filter=filter("aws_region", "${var.aws_region}"),
-         rollup="sum").publish()
-  EOT
-}
-
-resource "signalfx_time_chart" "elb_5xx_error_rate_platinum" {
-  count       = local.is_platinum ? 1 : 0
-  name        = "${var.account_name} - ELB 5xx Error Rate (Platinum)"
-  description = "ELB/ALB 5xx error rate for Platinum tier app overview."
-
-  # same SignalFlow as elb_5xx_error_rate
-  program_text = <<-EOF
-    errors = data("aws.elb.httpcode_elb_5xx",
-                  filter=filter("aws_region", "${var.aws_region}"),
-                  rollup="sum")
-    requests = data("aws.elb.request_count",
-                    filter=filter("aws_region", "${var.aws_region}"),
-                    rollup="sum")
-    (errors / requests).scale(100).publish(label="error_rate_pct")
-  EOF
-}
-
-resource "signalfx_dashboard" "app_overview" {
-  count           = local.is_platinum ? 1 : 0
-  name            = "${var.account_name} - App Overview"
-  dashboard_group = signalfx_dashboard_group.aws_account.id
-  description     = "Higher-tier app overview for ${var.account_name}."
-  time_range      = "-1h"
-
-  chart {
-    chart_id = signalfx_time_chart.elb_request_count_platinum[0].id
-    width    = 12
-    height   = 4
-    row      = 0
-    column   = 0
-  }
-
-  chart {
-    chart_id = signalfx_time_chart.elb_5xx_error_rate_platinum[0].id
-    width    = 12
-    height   = 4
-    row      = 4
-    column   = 0
-  }
-}
-
-# --------- Outputs ---------
-
-output "external_id" {
-  value     = signalfx_aws_external_integration.this.external_id
-  sensitive = true
-}
-
-output "splunk_aws_account_id" {
-  value     = signalfx_aws_external_integration.this.signalfx_aws_account
-  sensitive = true
-}
-
-output "splunk_role_arn" {
-  value = aws_iam_role.splunk_o11y.arn
-}
+# Platinum app_overview as you already have...
+resource "signalfx_time_chart" "elb_request_count_platinum" { ... }
+resource "signalfx_time_chart" "elb_5xx_error_rate_platinum" { ... }
+resource "signalfx_dashboard" "app_overview" { ... }
 
