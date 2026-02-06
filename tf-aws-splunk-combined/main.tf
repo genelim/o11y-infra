@@ -42,9 +42,9 @@ variable "aws_region" {
   type = string
 }
 
-variable "aws_profile" {
-  type = string
-}
+#variable "aws_profile" {
+#  type = string
+#}
 
 # --------- Splunk external integration ---------
 # Gives us external_id and Splunk's AWS account ID. [web:1][web:90]
