@@ -68,9 +68,12 @@ locals {
 
 # --------- Splunk AWS integration ---------
 
+
 resource "signalfx_aws_integration" "this" {
   enabled                 = true
-  integration_id          = var.external_integration_id
+  # REMOVE this line:
+  # integration_id        = var.external_integration_id
+
   external_id             = var.external_integration_external_id
   role_arn                = var.splunk_role_arn
 
@@ -79,6 +82,7 @@ resource "signalfx_aws_integration" "this" {
   use_metric_streams_sync = true
   enable_aws_usage        = true
 }
+
 
 # --------- Splunk O11y dashboards ---------
 
