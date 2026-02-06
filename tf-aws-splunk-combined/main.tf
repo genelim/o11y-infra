@@ -99,13 +99,22 @@ resource "aws_iam_policy" "splunk_o11y" {
         "cloudwatch:DeleteMetricStream",
         "cloudwatch:StartMetricStreams",
         "cloudwatch:StopMetricStreams",
+
         "logs:DescribeLogGroups",
         "logs:DescribeLogStreams",
+
         "ec2:DescribeInstances",
         "ec2:DescribeInstanceStatus",
         "ec2:DescribeRegions",
         "ec2:DescribeTags",
         "ec2:DescribeReservedInstances",
+        "ec2:DescribeReservedInstancesModifications",
+        "ec2:DescribeVolumes",
+        "ec2:DescribeVolumeStatus",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs",
+
         "tag:GetResources",
         "organizations:DescribeOrganization"
       ],
