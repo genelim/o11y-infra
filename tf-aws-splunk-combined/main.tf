@@ -145,6 +145,64 @@ resource "signalfx_aws_integration" "this" {
   enable_aws_usage         = true
 }
 
+# --------- Splunk O11y dashboards (example) ---------
+# Creates a dashboard group and one core AWS metrics dashboard
+# per onboarded account. [web:136][web:139]
+
+resource "signalfx_dashboard_group" "aws_account" {
+  name = "${var.account_name} - AWS"
+}
+
+resource "signalfx_dashboard" "aws_core_metrics" {
+  name             = "${var.account_name} - Core AWS Metrics"
+  dashboard_group  = signalfx_dashboard_group.aws_account.id
+  time_range       = "-1h"
+  description      = "Core AWS infrastructure metrics for ${var.account_name} (requests, latency, errors)."
+  charts_resolution = "high"
+
+  # Example chart 1: ALB/ELB request count (CloudWatch metric)
+  chart {
+    name        = "ELB/ALB Request Count"
+    description = "Sum of request count across ELB/ALB in ${var.aws_region}."
+    type        = "TimeSeries"
+
+    program_text = <<-EOF
+      data("aws.elb.request_count", filter=filter("aws_region", "${var.aws_region}")
+        and filter("aws_account", "${var.account_name}"), rollup="sum")
+      .publish(label="requests", enable=False)
+    EOF
+  }
+
+  # Example chart 2: ELB/ALB 5xx error rate
+  chart {
+    name        = "ELB/ALB 5xx Error Rate"
+    description = "Rate of 5xx responses on ELB/ALB in ${var.aws_region}."
+    type        = "TimeSeries"
+
+    program_text = <<-EOF
+      errors = data("aws.elb.httpcode_elb_5xx", filter=filter("aws_region", "${var.aws_region}")
+        and filter("aws_account", "${var.account_name}"), rollup="sum")
+      requests = data("aws.elb.request_count", filter=filter("aws_region", "${var.aws_region}")
+        and filter("aws_account", "${var.account_name}"), rollup="sum")
+      (errors / requests).scale(100).publish(label="error_rate_pct", enable=False)
+    EOF
+  }
+
+  # Example chart 3: RDS CPU utilization (only shows if RDS exists)
+  chart {
+    name        = "RDS CPU Utilization"
+    description = "Average CPU utilization for RDS instances in ${var.aws_region}."
+    type        = "TimeSeries"
+
+    program_text = <<-EOF
+      data("aws.rds.cpuutilization", filter=filter("aws_region", "${var.aws_region}")
+        and filter("aws_account", "${var.account_name}"), rollup="avg")
+      .publish(label="rds_cpu", enable=False)
+    EOF
+  }
+}
+
+
 # --------- Outputs ---------
 
 output "external_id" {
