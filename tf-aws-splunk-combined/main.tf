@@ -19,8 +19,8 @@ provider "signalfx" {
 }
 
 provider "aws" {
-  region  = var.aws_region
-#  profile = var.aws_profile
+  region = var.aws_region
+  # profile = var.aws_profile
 }
 
 # --------- Variables ---------
@@ -42,9 +42,9 @@ variable "aws_region" {
   type = string
 }
 
-#variable "aws_profile" {
-#  type = string
-#}
+# variable "aws_profile" {
+#   type = string
+# }
 
 # --------- Splunk external integration ---------
 # Gives us external_id and Splunk's AWS account ID. [web:1][web:90]
@@ -72,6 +72,12 @@ data "aws_iam_policy_document" "splunk_assume_role" {
     }
   }
 }
+
+resource "aws_iam_role" "splunk_o11y" {
+  name               = "${var.account_name}-splunk-o11y"
+  assume_role_policy = data.aws_iam_policy_document.splunk_assume_role.json
+}
+
 resource "aws_iam_policy" "splunk_o11y" {
   name        = "${var.account_name}-splunk-o11y-policy"
   description = "Permissions required by Splunk Observability Cloud"
@@ -108,25 +114,24 @@ resource "aws_iam_policy" "splunk_o11y" {
 JSON
 }
 
-
 resource "aws_iam_role_policy_attachment" "splunk_o11y_attach" {
   role       = aws_iam_role.splunk_o11y.name
   policy_arn = aws_iam_policy.splunk_o11y.arn
 }
 
 # --------- Splunk AWS integration ---------
-# Now we have integration_id (external integration), external_id, and roleArn. [web:2][web:5][web:89]
+# Uses integration_id, external_id, and roleArn. [web:2][web:89]
 
 resource "signalfx_aws_integration" "this" {
-  enabled                 = true
-  integration_id          = signalfx_aws_external_integration.this.id
-  external_id             = signalfx_aws_external_integration.this.external_id
-  role_arn                = aws_iam_role.splunk_o11y.arn
+  enabled                  = true
+  integration_id           = signalfx_aws_external_integration.this.id
+  external_id              = signalfx_aws_external_integration.this.external_id
+  role_arn                 = aws_iam_role.splunk_o11y.arn
 
-  regions                 = [var.aws_region]
-  import_cloud_watch      = true
-  use_metric_streams_sync = true
-  enable_aws_usage        = true
+  regions                  = [var.aws_region]
+  import_cloud_watch       = true
+  use_metric_streams_sync  = true
+  enable_aws_usage         = true
 }
 
 # --------- Outputs ---------
