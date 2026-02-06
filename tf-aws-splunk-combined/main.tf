@@ -42,6 +42,16 @@ variable "aws_region" {
   type = string
 }
 
+variable "obs_tier" {
+  type    = string
+  default = "bronze"  # allowed: "bronze", "silver", "gold", "platinum"
+}
+
+locals {
+  is_silver_plus = var.obs_tier != "bronze"
+  is_gold_plus   = var.obs_tier == "gold" || var.obs_tier == "platinum"
+}
+
 # variable "aws_profile" {
 #   type = string
 # }
@@ -221,6 +231,30 @@ resource "signalfx_dashboard" "aws_core_metrics" {
     width    = 12
     height   = 4
     row      = 8
+    column   = 0
+  }
+}
+
+resource "signalfx_dashboard" "app_overview" {
+  count           = local.is_silver_plus ? 1 : 0
+  name            = "${var.account_name} - App Overview"
+  dashboard_group = signalfx_dashboard_group.aws_account.id
+  description     = "Higher-tier app overview for ${var.account_name}."
+  time_range      = "-1h"
+
+  chart {
+    chart_id = signalfx_time_chart.elb_request_count.id
+    width    = 12
+    height   = 4
+    row      = 0
+    column   = 0
+  }
+
+  chart {
+    chart_id = signalfx_time_chart.elb_5xx_error_rate.id
+    width    = 12
+    height   = 4
+    row      = 4
     column   = 0
   }
 }
