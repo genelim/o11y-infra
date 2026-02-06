@@ -156,14 +156,13 @@ resource "signalfx_dashboard_group" "aws_account" {
 resource "signalfx_time_chart" "elb_request_count" {
   name        = "${var.account_name} - ELB/ALB Request Count"
   description = "Sum of request count across ELB/ALB in ${var.aws_region}."
+  plot_type   = "LineChart"
 
-  # Adjust metric name + dimensions to match your environment.
-  program_text = <<-EOF
+  program_text = <<-EOT
     data("aws.elb.request_count",
          filter=filter("aws_region", "${var.aws_region}"),
-         rollup="sum")
-      .publish()
-  EOF
+         rollup="sum").publish()
+  EOT
 }
 
 # Chart 2: ELB/ALB 5xx Error Rate
@@ -186,13 +185,13 @@ resource "signalfx_time_chart" "elb_5xx_error_rate" {
 resource "signalfx_time_chart" "rds_cpu" {
   name        = "${var.account_name} - RDS CPU Utilization"
   description = "Average CPU for RDS instances in ${var.aws_region}."
+  plot_type   = "LineChart"
 
-  program_text = <<-EOF
+  program_text = <<-EOT
     data("aws.rds.cpuutilization",
          filter=filter("aws_region", "${var.aws_region}"),
-         rollup="avg")
-      .publish()
-  EOF
+         rollup="avg").publish()
+  EOT
 }
 
 resource "signalfx_dashboard" "aws_core_metrics" {
