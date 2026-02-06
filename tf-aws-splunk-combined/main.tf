@@ -105,6 +105,7 @@ resource "aws_iam_policy" "splunk_o11y" {
         "ec2:DescribeInstanceStatus",
         "ec2:DescribeRegions",
         "ec2:DescribeTags",
+        "ec2:DescribeReservedInstances",
         "tag:GetResources",
         "organizations:DescribeOrganization"
       ],
