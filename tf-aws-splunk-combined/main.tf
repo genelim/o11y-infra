@@ -164,6 +164,21 @@ resource "signalfx_time_chart" "rds_cpu" {
         ).mean(by=["aws_account_id", "aws_region", "DBInstanceIdentifier"]).publish()
   EOT
 }
+resource "signalfx_time_chart" "rds_network_throughput" {
+  count       = local.has_rds ? 1 : 0
+  name        = "${var.account_name} - RDS Network Throughput"
+  description = "Average network throughput for RDS instances in ${var.aws_region}."
+  plot_type   = "LineChart"
+
+  program_text = <<-EOT
+    data('NetworkThroughput',
+         filter=filter('namespace', 'AWS/RDS')
+           and filter('aws_region', '${var.aws_region}')
+    ).mean(by=['AWSUniqueId']).publish(label='A')
+  EOT
+}
+
+
 
 resource "signalfx_time_chart" "s3_resources" {
   count       = local.has_s3 ? 1 : 0
@@ -189,7 +204,8 @@ resource "signalfx_dashboard" "aws_core_metrics" {
   dynamic "chart" {
     for_each = local.has_rds ? [1] : []
     content {
-      chart_id = signalfx_time_chart.rds_cpu[0].id
+ #     chart_id = signalfx_time_chart.rds_cpu[0].id
+      chart_id = signalfx_time_chart.rds_network_throughput[0].id
       width    = 12
       height   = 4
       row      = 0
