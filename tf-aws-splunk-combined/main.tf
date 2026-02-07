@@ -67,9 +67,7 @@ locals {
   has_rds    = var.enable_rds
   has_lambda = var.enable_lambda
   has_s3     = var.enable_s3
-}
-
-locals {
+  has_elb    = true 
   # Bronze = minimal
   is_silver_plus = contains(["silver", "gold", "platinum"], var.obs_tier)
   is_gold_plus   = contains(["gold", "platinum"], var.obs_tier)
