@@ -79,7 +79,6 @@ resource "signalfx_aws_integration" "this" {
 
   regions                 = [var.aws_region]
   import_cloud_watch      = true
-  use_metric_streams_sync = true
   enable_aws_usage        = true
 
   poll_rate               = 60
