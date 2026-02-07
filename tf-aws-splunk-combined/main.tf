@@ -59,6 +59,16 @@ variable "splunk_role_arn" {
   type = string
 }
 
+variable "enable_rds"    { type = bool, default = false }
+variable "enable_lambda" { type = bool, default = false }
+variable "enable_s3"     { type = bool, default = false }
+
+locals {
+  has_rds    = var.enable_rds
+  has_lambda = var.enable_lambda
+  has_s3     = var.enable_s3
+}
+
 locals {
   # Bronze = minimal
   is_silver_plus = contains(["silver", "gold", "platinum"], var.obs_tier)
@@ -95,6 +105,7 @@ resource "signalfx_dashboard_group" "aws_account" {
 #Bronze
 # 1) ELB/ALB request count (by load balancer)
 resource "signalfx_time_chart" "elb_request_count" {
+  count       = local.has_elb ? 1 : 0
   name        = "${var.account_name} - ELB/ALB Request Count"
   description = "Sum of request count across ELB/ALB in ${var.aws_region}."
   plot_type   = "LineChart"
@@ -107,8 +118,10 @@ resource "signalfx_time_chart" "elb_request_count" {
         ).sum(by=["aws_account_id", "aws_region", "LoadBalancer"]).publish()
   EOT
 }
+
 # 2) ELB/ALB 5xx error rate (percent)
 resource "signalfx_time_chart" "elb_5xx_error_rate" {
+  count       = local.has_elb ? 1 : 0
   name        = "${var.account_name} - ELB/ALB 5xx Error Rate"
   description = "Percent of 5xx responses on ELB/ALB in ${var.aws_region}."
 
@@ -122,12 +135,14 @@ resource "signalfx_time_chart" "elb_5xx_error_rate" {
                     filter=(filter("namespace", "AWS/ApplicationELB")
                             or filter("namespace", "AWS/ELB"))
                       and filter("aws_region", "${var.aws_region}")
-                 ).sum(by=["aws_account_id", "aws_region", "LoadBalancer"])
+                   ).sum(by=["aws_account_id", "aws_region", "LoadBalancer"])
     (errors / requests).scale(100).publish(label="error_rate_pct")
   EOF
 }
+
 # 3) RDS CPU usage (by DB instance)
 resource "signalfx_time_chart" "rds_cpu" {
+  count       = local.has_rds ? 1 : 0
   name        = "${var.account_name} - RDS CPU Utilization"
   description = "Average CPU for RDS instances in ${var.aws_region}."
   plot_type   = "LineChart"
@@ -135,8 +150,6 @@ resource "signalfx_time_chart" "rds_cpu" {
   program_text = <<-EOT
     data("CPUUtilization",
          filter=filter("namespace", "AWS/RDS")
-           and filter("stat", "mean")
-           and filter("DBInstanceIdentifier", "*")
            and filter("aws_region", "${var.aws_region}")
         ).mean(by=["aws_account_id", "aws_region", "DBInstanceIdentifier"]).publish()
   EOT
@@ -147,38 +160,48 @@ resource "signalfx_time_chart" "rds_cpu" {
 resource "signalfx_dashboard" "aws_core_metrics" {
   name            = "${var.account_name} - Core AWS Metrics"
   dashboard_group = signalfx_dashboard_group.aws_account.id
-  description     = "Core AWS infra metrics for ${var.account_name}."
   time_range      = "-1h"
 
-  chart {
-    chart_id = signalfx_time_chart.elb_request_count.id
-    width    = 12
-    height   = 4
-    row      = 0
-    column   = 0
+  # ELB row (only if has_elb)
+  dynamic "chart" {
+    for_each = local.has_elb ? [1] : []
+    content {
+      chart_id = signalfx_time_chart.elb_request_count[0].id
+      width    = 12
+      height   = 4
+      row      = 0
+      column   = 0
+    }
   }
 
-  chart {
-    chart_id = signalfx_time_chart.elb_5xx_error_rate.id
-    width    = 12
-    height   = 4
-    row      = 4
-    column   = 0
+  dynamic "chart" {
+    for_each = local.has_elb ? [1] : []
+    content {
+      chart_id = signalfx_time_chart.elb_5xx_error_rate[0].id
+      width    = 12
+      height   = 4
+      row      = 4
+      column   = 0
+    }
   }
 
-  chart {
-    chart_id = signalfx_time_chart.rds_cpu.id
-    width    = 12
-    height   = 4
-    row      = 8
-    column   = 0
+  # RDS row (only if has_rds)
+  dynamic "chart" {
+    for_each = local.has_rds ? [1] : []
+    content {
+      chart_id = signalfx_time_chart.rds_cpu[0].id
+      width    = 12
+      height   = 4
+      row      = 8
+      column   = 0
+    }
   }
 }
 
 # ----- Platinum-only App Overview (no chart ID reuse) -----
 
 resource "signalfx_time_chart" "elb_request_count_platinum" {
-  count       = local.is_platinum ? 1 : 0
+  count       = local.is_platinum && local.has_elb ? 1 : 0
   name        = "${var.account_name} - ELB Requests (Platinum)"
   description = "ELB/ALB request count for Platinum tier app overview."
   plot_type   = "LineChart"
@@ -191,7 +214,7 @@ resource "signalfx_time_chart" "elb_request_count_platinum" {
 }
 
 resource "signalfx_time_chart" "elb_5xx_error_rate_platinum" {
-  count       = local.is_platinum ? 1 : 0
+  count       = local.is_platinum && local.has_elb ? 1 : 0
   name        = "${var.account_name} - ELB 5xx Error Rate (Platinum)"
   description = "ELB/ALB 5xx error rate for Platinum tier app overview."
 
@@ -205,7 +228,6 @@ resource "signalfx_time_chart" "elb_5xx_error_rate_platinum" {
     (errors / requests).scale(100).publish(label="error_rate_pct")
   EOF
 }
-
 resource "signalfx_dashboard" "app_overview" {
   count           = local.is_platinum ? 1 : 0
   name            = "${var.account_name} - App Overview"
@@ -213,20 +235,30 @@ resource "signalfx_dashboard" "app_overview" {
   description     = "Higher-tier app overview for ${var.account_name}."
   time_range      = "-1h"
 
-  chart {
-    chart_id = signalfx_time_chart.elb_request_count_platinum[0].id
-    width    = 12
-    height   = 4
-    row      = 0
-    column   = 0
+  # ELB request count (only if ELB enabled)
+  dynamic "chart" {
+    for_each = local.has_elb ? [1] : []
+    content {
+      chart_id = signalfx_time_chart.elb_request_count_platinum[0].id
+      width    = 12
+      height   = 4
+      row      = 0
+      column   = 0
+    }
   }
 
-  chart {
-    chart_id = signalfx_time_chart.elb_5xx_error_rate_platinum[0].id
-    width    = 12
-    height   = 4
-    row      = 4
-    column   = 0
+  # ELB 5xx error rate (only if ELB enabled)
+  dynamic "chart" {
+    for_each = local.has_elb ? [1] : []
+    content {
+      chart_id = signalfx_time_chart.elb_5xx_error_rate_platinum[0].id
+      width    = 12
+      height   = 4
+      row      = 4
+      column   = 0
+    }
   }
+
+  # You can add more Platinum-only panels here, gated by locals.has_rds, etc.
 }
 
