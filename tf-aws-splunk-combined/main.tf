@@ -196,17 +196,17 @@ resource "signalfx_dashboard" "aws_core_metrics" {
       column   = 0
     }
   }
- # S3 row (only if has_s3) – optional
   dynamic "chart" {
     for_each = local.has_s3 ? [1] : []
     content {
-      chart_id = signalfx_time_chart.s3_requests[0].id
+      chart_id = signalfx_time_chart.s3_resources[0].id
       width    = 12
       height   = 4
       row      = 12
       column   = 0
     }
   }
+
    # ELB row (only if has_elb)
   dynamic "chart" {
     for_each = local.has_elb ? [1] : []
