@@ -187,10 +187,7 @@ resource "signalfx_time_chart" "s3_resources" {
   plot_type   = "LineChart"
 
   program_text = <<-EOT
-    data("sf.org.dataInventory.resources",
-         filter=filter("region", "${var.aws_region}")
-           and filter("service", "AWS/S3")
-        ).sum().publish()
+    data('NetworkThroughput', filter=filter('namespace', 'AWS/RDS')).mean(by=['AWSUniqueId']).publish(label='A')
   EOT
 }
 
