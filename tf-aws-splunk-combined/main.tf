@@ -165,6 +165,19 @@ resource "signalfx_time_chart" "rds_cpu" {
   EOT
 }
 
+resource "signalfx_time_chart" "s3_requests" {
+  count       = local.has_s3 ? 1 : 0
+  name        = "${var.account_name} - S3 Requests"
+  description = "Total S3 requests in ${var.aws_region}."
+  plot_type   = "LineChart"
+
+  program_text = <<-EOT
+    data("NumberOfRequests",
+         filter=filter("namespace", "AWS/S3")
+           and filter("aws_region", "${var.aws_region}")
+        ).sum(by=["aws_account_id", "aws_region", "BucketName"]).publish()
+  EOT
+}
 
 
 resource "signalfx_dashboard" "aws_core_metrics" {
@@ -203,6 +216,17 @@ resource "signalfx_dashboard" "aws_core_metrics" {
       width    = 12
       height   = 4
       row      = 8
+      column   = 0
+    }
+  }
+ # S3 row (only if has_s3) – optional
+  dynamic "chart" {
+    for_each = local.has_s3 ? [1] : []
+    content {
+      chart_id = signalfx_time_chart.s3_requests[0].id
+      width    = 12
+      height   = 4
+      row      = 12
       column   = 0
     }
   }
