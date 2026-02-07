@@ -192,7 +192,7 @@ resource "signalfx_dashboard" "aws_core_metrics" {
       chart_id = signalfx_time_chart.rds_cpu[0].id
       width    = 12
       height   = 4
-      row      = 8
+      row      = 0
       column   = 0
     }
   }
@@ -202,7 +202,7 @@ resource "signalfx_dashboard" "aws_core_metrics" {
       chart_id = signalfx_time_chart.s3_resources[0].id
       width    = 12
       height   = 4
-      row      = 12
+      row      = 4
       column   = 0
     }
   }
@@ -214,7 +214,7 @@ resource "signalfx_dashboard" "aws_core_metrics" {
       chart_id = signalfx_time_chart.elb_request_count[0].id
       width    = 12
       height   = 4
-      row      = 0
+      row      = 8
       column   = 0
     }
   }
@@ -225,7 +225,7 @@ resource "signalfx_dashboard" "aws_core_metrics" {
       chart_id = signalfx_time_chart.elb_5xx_error_rate[0].id
       width    = 12
       height   = 4
-      row      = 4
+      row      = 12
       column   = 0
     }
   }
