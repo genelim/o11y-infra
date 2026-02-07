@@ -107,7 +107,7 @@ resource "aws_iam_policy" "splunk_o11y" {
         "tag:GetResources",
         "organizations:DescribeOrganization"
         
-        # Lambda discovery
+        
           "lambda:GetAlias",
           "lambda:ListFunctions",
           "lambda:ListTags"
