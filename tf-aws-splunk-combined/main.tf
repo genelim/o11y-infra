@@ -94,42 +94,58 @@ resource "signalfx_dashboard_group" "aws_account" {
 
 # ----- Bronze core charts -----
 
+# ----- Bronze core charts -----
+
+# 1) ELB/ALB request count (by load balancer)
 resource "signalfx_time_chart" "elb_request_count" {
   name        = "${var.account_name} - ELB/ALB Request Count"
   description = "Sum of request count across ELB/ALB in ${var.aws_region}."
   plot_type   = "LineChart"
 
   program_text = <<-EOT
-    data("aws.elb.request_count",
-         filter=filter("aws_region", "${var.aws_region}"),
-         rollup="sum").publish()
+    data("RequestCount",
+         filter=filter("namespace", "AWS/ApplicationELB")
+           or filter("namespace", "AWS/ELB")
+        ).sum(by=["aws_account_id", "aws_region", "LoadBalancer"])
+         .filter(filter("aws_region", "${var.aws_region}"))
+         .publish()
   EOT
 }
 
+# 2) ELB/ALB 5xx error rate (percent)
 resource "signalfx_time_chart" "elb_5xx_error_rate" {
   name        = "${var.account_name} - ELB/ALB 5xx Error Rate"
   description = "Percent of 5xx responses on ELB/ALB in ${var.aws_region}."
 
   program_text = <<-EOF
-    errors = data("aws.elb.httpcode_elb_5xx",
-                  filter=filter("aws_region", "${var.aws_region}"),
-                  rollup="sum")
-    requests = data("aws.elb.request_count",
-                    filter=filter("aws_region", "${var.aws_region}"),
-                    rollup="sum")
+    errors = data("HTTPCode_ELB_5XX_Count",
+                  filter=filter("namespace", "AWS/ApplicationELB")
+                    or filter("namespace", "AWS/ELB")
+                 ).sum(by=["aws_account_id", "aws_region", "LoadBalancer"])
+                  .filter(filter("aws_region", "${var.aws_region}"))
+    requests = data("RequestCount",
+                    filter=filter("namespace", "AWS/ApplicationELB")
+                      or filter("namespace", "AWS/ELB")
+                 ).sum(by=["aws_account_id", "aws_region", "LoadBalancer"])
+                  .filter(filter("aws_region", "${var.aws_region}"))
     (errors / requests).scale(100).publish(label="error_rate_pct")
   EOF
 }
 
+# 3) RDS CPU usage (by DB instance)
 resource "signalfx_time_chart" "rds_cpu" {
   name        = "${var.account_name} - RDS CPU Utilization"
   description = "Average CPU for RDS instances in ${var.aws_region}."
   plot_type   = "LineChart"
 
   program_text = <<-EOT
-    data("aws.rds.cpuutilization",
-         filter=filter("aws_region", "${var.aws_region}"),
-         rollup="average").publish()
+    data("CPUUtilization",
+         filter=filter("namespace", "AWS/RDS")
+           and filter("stat", "mean")
+           and filter("DBInstanceIdentifier", "*")
+        ).mean(by=["aws_account_id", "aws_region", "DBInstanceIdentifier"])
+         .filter(filter("aws_region", "${var.aws_region}"))
+         .publish()
   EOT
 }
 
