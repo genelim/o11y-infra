@@ -81,6 +81,9 @@ resource "signalfx_aws_integration" "this" {
   import_cloud_watch      = true
   use_metric_streams_sync = true
   enable_aws_usage        = true
+
+  poll_rate               = 60
+  use_metric_streams_sync = false
 }
 
 
