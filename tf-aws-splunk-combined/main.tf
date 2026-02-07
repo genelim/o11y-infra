@@ -104,11 +104,9 @@ resource "signalfx_time_chart" "elb_request_count" {
          filter=(filter("namespace", "AWS/ApplicationELB")
                  or filter("namespace", "AWS/ELB"))
            and filter("aws_region", "${var.aws_region}")
-        ).sum(by=["aws_account_id", "aws_region", "LoadBalancer"])
-         .publish()
+        ).sum(by=["aws_account_id", "aws_region", "LoadBalancer"]).publish()
   EOT
 }
-
 # 2) ELB/ALB 5xx error rate (percent)
 resource "signalfx_time_chart" "elb_5xx_error_rate" {
   name        = "${var.account_name} - ELB/ALB 5xx Error Rate"
@@ -128,7 +126,6 @@ resource "signalfx_time_chart" "elb_5xx_error_rate" {
     (errors / requests).scale(100).publish(label="error_rate_pct")
   EOF
 }
-
 # 3) RDS CPU usage (by DB instance)
 resource "signalfx_time_chart" "rds_cpu" {
   name        = "${var.account_name} - RDS CPU Utilization"
@@ -141,10 +138,11 @@ resource "signalfx_time_chart" "rds_cpu" {
            and filter("stat", "mean")
            and filter("DBInstanceIdentifier", "*")
            and filter("aws_region", "${var.aws_region}")
-        ).mean(by=["aws_account_id", "aws_region", "DBInstanceIdentifier"])
-         .publish()
+        ).mean(by=["aws_account_id", "aws_region", "DBInstanceIdentifier"]).publish()
   EOT
 }
+
+
 
 resource "signalfx_dashboard" "aws_core_metrics" {
   name            = "${var.account_name} - Core AWS Metrics"
