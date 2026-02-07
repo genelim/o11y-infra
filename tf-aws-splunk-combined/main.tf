@@ -171,10 +171,7 @@ resource "signalfx_time_chart" "rds_network_throughput" {
   plot_type   = "LineChart"
 
   program_text = <<-EOT
-    data('NetworkThroughput',
-         filter=filter('namespace', 'AWS/RDS')
-           and filter('aws_region', '${var.aws_region}')
-    ).mean(by=['AWSUniqueId']).publish(label='A')
+    data('NetworkThroughput', filter=filter('namespace', 'AWS/RDS')).mean(by=['AWSUniqueId']).publish(label='A')
   EOT
 }
 
