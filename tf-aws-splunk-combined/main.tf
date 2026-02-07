@@ -165,17 +165,17 @@ resource "signalfx_time_chart" "rds_cpu" {
   EOT
 }
 
-resource "signalfx_time_chart" "s3_requests" {
+resource "signalfx_time_chart" "s3_resources" {
   count       = local.has_s3 ? 1 : 0
-  name        = "${var.account_name} - S3 Requests"
-  description = "Total S3 requests in ${var.aws_region}."
+  name        = "${var.account_name} - S3 Resources (Inventory)"
+  description = "Number of AWS/S3 resources seen by the integration in ${var.aws_region}."
   plot_type   = "LineChart"
 
   program_text = <<-EOT
-    data("NumberOfRequests",
-         filter=filter("namespace", "AWS/S3")
-           and filter("aws_region", "${var.aws_region}")
-        ).sum(by=["aws_account_id", "aws_region", "BucketName"]).publish()
+    data("sf.org.dataInventory.resources",
+         filter=filter("region", "${var.aws_region}")
+           and filter("service", "AWS/S3")
+        ).sum().publish()
   EOT
 }
 
@@ -184,29 +184,6 @@ resource "signalfx_dashboard" "aws_core_metrics" {
   name            = "${var.account_name} - Core AWS Metrics"
   dashboard_group = signalfx_dashboard_group.aws_account.id
   time_range      = "-1h"
-
-  # ELB row (only if has_elb)
-  dynamic "chart" {
-    for_each = local.has_elb ? [1] : []
-    content {
-      chart_id = signalfx_time_chart.elb_request_count[0].id
-      width    = 12
-      height   = 4
-      row      = 0
-      column   = 0
-    }
-  }
-
-  dynamic "chart" {
-    for_each = local.has_elb ? [1] : []
-    content {
-      chart_id = signalfx_time_chart.elb_5xx_error_rate[0].id
-      width    = 12
-      height   = 4
-      row      = 4
-      column   = 0
-    }
-  }
 
   # RDS row (only if has_rds)
   dynamic "chart" {
@@ -230,6 +207,29 @@ resource "signalfx_dashboard" "aws_core_metrics" {
       column   = 0
     }
   }
+   # ELB row (only if has_elb)
+  dynamic "chart" {
+    for_each = local.has_elb ? [1] : []
+    content {
+      chart_id = signalfx_time_chart.elb_request_count[0].id
+      width    = 12
+      height   = 4
+      row      = 0
+      column   = 0
+    }
+  }
+
+  dynamic "chart" {
+    for_each = local.has_elb ? [1] : []
+    content {
+      chart_id = signalfx_time_chart.elb_5xx_error_rate[0].id
+      width    = 12
+      height   = 4
+      row      = 4
+      column   = 0
+    }
+  }
+
 }
 
 # ----- Platinum-only App Overview (no chart ID reuse) -----
