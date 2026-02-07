@@ -59,9 +59,21 @@ variable "splunk_role_arn" {
   type = string
 }
 
-variable "enable_rds"    { type = bool, default = false }
-variable "enable_lambda" { type = bool, default = false }
-variable "enable_s3"     { type = bool, default = false }
+variable "enable_rds" {
+  type    = bool
+  default = false
+}
+
+variable "enable_lambda" {
+  type    = bool
+  default = false
+}
+
+variable "enable_s3" {
+  type    = bool
+  default = false
+}
+
 
 locals {
   has_rds    = var.enable_rds
